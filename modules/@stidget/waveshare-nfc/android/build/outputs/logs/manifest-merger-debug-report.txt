@@ -1,0 +1,14 @@
+-- Merging decision tree log ---
+manifest
+ADDED from /Users/sohamdas/mine/nfcTest/modules/@stidget/waveshare-nfc/android/src/main/AndroidManifest.xml:1:1-2:12
+INJECTED from /Users/sohamdas/mine/nfcTest/modules/@stidget/waveshare-nfc/android/src/main/AndroidManifest.xml:1:1-2:12
+	package
+		INJECTED from /Users/sohamdas/mine/nfcTest/modules/@stidget/waveshare-nfc/android/src/main/AndroidManifest.xml
+uses-sdk
+INJECTED from /Users/sohamdas/mine/nfcTest/modules/@stidget/waveshare-nfc/android/src/main/AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from /Users/sohamdas/mine/nfcTest/modules/@stidget/waveshare-nfc/android/src/main/AndroidManifest.xml
+INJECTED from /Users/sohamdas/mine/nfcTest/modules/@stidget/waveshare-nfc/android/src/main/AndroidManifest.xml
+	android:targetSdkVersion
+		INJECTED from /Users/sohamdas/mine/nfcTest/modules/@stidget/waveshare-nfc/android/src/main/AndroidManifest.xml
+	android:minSdkVersion
+		INJECTED from /Users/sohamdas/mine/nfcTest/modules/@stidget/waveshare-nfc/android/src/main/AndroidManifest.xml

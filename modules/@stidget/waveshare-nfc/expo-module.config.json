@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android", "web"],
+  "apple": {
+    "modules": ["StidgetWaveshareNfcModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.stidgetwavesharenfc.StidgetWaveshareNfcModule"]
+  }
+}
