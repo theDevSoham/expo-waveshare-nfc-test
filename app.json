@@ -41,7 +41,8 @@
           }
         }
       ],
-      "./plugins/withWaveshareNfc.js"
+      "./plugins/withWaveshareNfc.js",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,
