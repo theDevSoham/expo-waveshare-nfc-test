@@ -5,10 +5,13 @@ import React, { useRef, useState } from "react";
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import NfcManager, { NfcTech } from "react-native-nfc-manager";
 
+const IMAGE = Asset.fromModule(require("@/assets/images/test.png"));
+
 const HomeScreen = () => {
   const [status, setStatus] = useState("Ready to Flash");
   const [progress, setProgress] = useState(0);
   const pollingInterval = useRef<number | null>(null);
+  const context = ImageManipulator.useImageManipulator(IMAGE.uri);
 
   // Helper to start polling the native getProgress() method
   const startPolling = () => {
@@ -39,12 +42,6 @@ const HomeScreen = () => {
     try {
       setStatus("Processing License...");
 
-      const asset = Asset.fromModule(require("@/assets/images/License.png"));
-      await asset.downloadAsync();
-
-      const context = ImageManipulator.useImageManipulator(
-        asset.localUri || asset.uri,
-      );
       context.resize({ width: 264, height: 176 }); // Exact Type 6 resolution
 
       const result = await context.renderAsync();
@@ -86,8 +83,12 @@ const HomeScreen = () => {
       await NfcManager.requestTechnology(NfcTech.NfcA);
       const tag = await NfcManager.getTag();
 
+      console.log("Tag ", tag);
+
       if (tag) {
         await processAndFlash(tag);
+      } else {
+        Alert.alert("Warning", "Tag not found");
       }
     } catch (ex) {
       console.warn("NFC Error:", ex);
@@ -100,6 +101,14 @@ const HomeScreen = () => {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Waveshare 2.7" Controller</Text>
+
+      {/* <Image
+        source={imageUri}
+        style={{
+          width: 500,
+          aspectRatio: 1,
+        }}
+      /> */}
 
       <TouchableOpacity
         style={[
