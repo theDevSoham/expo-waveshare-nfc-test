@@ -1,4 +1,5 @@
 import StidgetWaveshareNfc from "@/modules/@stidget/waveshare-nfc";
+import * as Sentry from "@sentry/react-native";
 import { Asset } from "expo-asset";
 import * as ImageManipulator from "expo-image-manipulator";
 import React, { useRef, useState } from "react";
@@ -13,22 +14,32 @@ const HomeScreen = () => {
   const pollingInterval = useRef<number | null>(null);
   const context = ImageManipulator.useImageManipulator(IMAGE.uri);
 
-  // Helper to start polling the native getProgress() method
   const startPolling = () => {
     setProgress(0);
+    Sentry.addBreadcrumb({
+      category: "nfc",
+      message: "Starting progress polling",
+    });
+
     pollingInterval.current = setInterval(() => {
-      const currentProgress = StidgetWaveshareNfc.getProgress();
+      try {
+        const currentProgress = StidgetWaveshareNfc.getProgress();
+        if (currentProgress >= 0) setProgress(currentProgress);
 
-      // Update UI if progress has changed
-      if (currentProgress >= 0) {
-        setProgress(currentProgress);
-      }
-
-      // Stop polling if we reach completion or an error state (-1)
-      if (currentProgress >= 100 || currentProgress === -1) {
+        if (currentProgress === -1) {
+          Sentry.captureMessage(
+            "NFC Hardware reported failure state (-1)",
+            "warning",
+          );
+          stopPolling();
+        } else if (currentProgress >= 100) {
+          stopPolling();
+        }
+      } catch (err) {
+        Sentry.captureException(err, { tags: { area: "polling" } });
         stopPolling();
       }
-    }, 100); // Poll every 100ms
+    }, 100);
   };
 
   const stopPolling = () => {
@@ -39,37 +50,54 @@ const HomeScreen = () => {
   };
 
   const processAndFlash = async (tag: any) => {
+    Sentry.setContext("nfc_tag", { tag_info: tag });
+
     try {
       setStatus("Processing License...");
+      Sentry.addBreadcrumb({
+        category: "image",
+        message: "Starting manipulation",
+      });
 
-      context.resize({ width: 264, height: 176 }); // Exact Type 6 resolution
-
+      context.resize({ width: 264, height: 176 });
       const result = await context.renderAsync();
       const saveResult = await result.saveAsync({
         base64: true,
         format: ImageManipulator.SaveFormat.PNG,
       });
 
-      if (saveResult.base64) {
-        setStatus("Flashing... Hold Steady");
+      if (!saveResult.base64) {
+        throw new Error("Base64 generation failed");
+      }
 
-        // Start polling right before the heavy native call
-        startPolling();
+      setStatus("Flashing... Hold Steady");
+      startPolling();
 
-        const success = await StidgetWaveshareNfc.flashImage(
-          saveResult.base64,
-          tag,
+      Sentry.addBreadcrumb({
+        category: "native",
+        message: "Invoking flashImage",
+      });
+      const success = await StidgetWaveshareNfc.flashImage(
+        saveResult.base64,
+        tag,
+      );
+
+      if (success) {
+        setProgress(100);
+        Sentry.captureMessage("Flash successful", "info");
+        Alert.alert("Success", "License Disc Updated!");
+      } else {
+        Sentry.captureMessage(
+          "flashImage returned false (likely hardware mismatch)",
+          "error",
         );
-
-        if (success) {
-          setProgress(100);
-          Alert.alert("Success", "License Disc Updated!");
-        } else {
-          Alert.alert("Error", "Flash interrupted or header mismatch.");
-        }
+        Alert.alert("Error", "Flash interrupted or header mismatch.");
       }
     } catch (error) {
-      console.error("Image processing error:", error);
+      Sentry.captureException(error, {
+        extra: { status, progress },
+        tags: { section: "image_processing" },
+      });
       Alert.alert("Error", "Runtime image processing failed.");
     } finally {
       stopPolling();
@@ -78,20 +106,40 @@ const HomeScreen = () => {
   };
 
   const startNfcDiscovery = async () => {
+    Sentry.addBreadcrumb({
+      category: "ui",
+      message: "User triggered NFC scan",
+    });
     try {
       setStatus("Scanning... Hold badge to phone");
+
+      // Attempt to request technology
       await NfcManager.requestTechnology(NfcTech.NfcA);
       const tag = await NfcManager.getTag();
 
-      console.log("Tag ", tag);
-
       if (tag) {
+        Sentry.addBreadcrumb({
+          category: "nfc",
+          message: "Tag discovered successfully",
+        });
         await processAndFlash(tag);
       } else {
+        Sentry.captureMessage(
+          "NFC session started but no tag was captured",
+          "warning",
+        );
         Alert.alert("Warning", "Tag not found");
       }
-    } catch (ex) {
-      console.warn("NFC Error:", ex);
+    } catch (ex: any) {
+      // Check if user just cancelled the session (common "error")
+      if (ex?.toString().includes("User cancel")) {
+        Sentry.addBreadcrumb({
+          category: "nfc",
+          message: "User cancelled NFC session",
+        });
+      } else {
+        Sentry.captureException(ex, { tags: { area: "nfc_discovery" } });
+      }
       setStatus("Retry Scan");
     } finally {
       NfcManager.cancelTechnologyRequest();
@@ -101,14 +149,6 @@ const HomeScreen = () => {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Waveshare 2.7" Controller</Text>
-
-      {/* <Image
-        source={imageUri}
-        style={{
-          width: 500,
-          aspectRatio: 1,
-        }}
-      /> */}
 
       <TouchableOpacity
         style={[

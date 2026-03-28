@@ -42,7 +42,15 @@
         }
       ],
       "./plugins/withWaveshareNfc.js",
-      "expo-asset"
+      "expo-asset",
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "project": "react-native",
+          "organization": "mine-eez"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
