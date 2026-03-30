@@ -12,6 +12,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.nfcTest"
     },
+    "assetBundlePatterns": ["**/*"],
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",

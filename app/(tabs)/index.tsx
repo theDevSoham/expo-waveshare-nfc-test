@@ -6,13 +6,10 @@ import React, { useRef, useState } from "react";
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import NfcManager, { NfcTech } from "react-native-nfc-manager";
 
-const IMAGE = Asset.fromModule(require("@/assets/images/test.png"));
-
 const HomeScreen = () => {
   const [status, setStatus] = useState("Ready to Flash");
   const [progress, setProgress] = useState(0);
   const pollingInterval = useRef<number | null>(null);
-  const context = ImageManipulator.useImageManipulator(IMAGE.uri);
 
   const startPolling = () => {
     setProgress(0);
@@ -50,16 +47,31 @@ const HomeScreen = () => {
   };
 
   const processAndFlash = async (tag: any) => {
-    Sentry.setContext("nfc_tag", { tag_info: tag });
-
     try {
-      setStatus("Processing License...");
+      setStatus("Downloading Test Image...");
+
+      // We use a specific ID from Picsum to ensure consistency
+      const remoteUri = "https://picsum.photos/id/237/264/176";
+
       Sentry.addBreadcrumb({
-        category: "image",
-        message: "Starting manipulation",
+        category: "nfc_test",
+        message: "Downloading from Picsum",
+        data: { url: remoteUri },
       });
 
+      const IMAGE = Asset.fromURI(remoteUri);
+      const downloadedImage = await IMAGE.downloadAsync();
+
+      setStatus("Manipulating test image...");
+
+      // 1. ImageManipulator will download and cache this URL automatically
+      const context = ImageManipulator.ImageManipulator.manipulate(
+        downloadedImage.localUri || downloadedImage.uri,
+      );
+
+      // 2. Force the hardware resolution (264x176)
       context.resize({ width: 264, height: 176 });
+
       const result = await context.renderAsync();
       const saveResult = await result.saveAsync({
         base64: true,
@@ -77,10 +89,12 @@ const HomeScreen = () => {
         category: "native",
         message: "Invoking flashImage",
       });
-      const success = await StidgetWaveshareNfc.flashImage(
-        saveResult.base64,
-        tag,
-      );
+
+      console.log("Invoking native flash...");
+
+      // Do NOT pass 'tag' anymore.
+      // The Kotlin module now pulls it from the Activity Intent automatically.
+      const success = await StidgetWaveshareNfc.flashImage(saveResult.base64);
 
       if (success) {
         setProgress(100);
@@ -94,6 +108,7 @@ const HomeScreen = () => {
         Alert.alert("Error", "Flash interrupted or header mismatch.");
       }
     } catch (error) {
+      console.error(error);
       Sentry.captureException(error, {
         extra: { status, progress },
         tags: { section: "image_processing" },

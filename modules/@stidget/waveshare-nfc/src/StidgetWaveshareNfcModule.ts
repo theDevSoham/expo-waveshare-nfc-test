@@ -7,7 +7,7 @@ declare class StidgetWaveshareNfcModule extends NativeModule<StidgetWaveshareNfc
    * @param base64Image Must be exactly 264x176 pixels.
    * @param nfcTag The native tag object from the NFC intent.
    */
-  flashImage(base64Image: string, nfcTag: any): Promise<boolean>;
+  flashImage(base64Image: string): Promise<boolean>;
 
   /**
    * Returns the current transfer progress (0-100).
