@@ -42,4 +42,7 @@ app-example
 /ios
 /android
 
+# generated module native folders
+modules/**/android/build/
+
 .env.local
