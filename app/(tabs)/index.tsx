@@ -4,12 +4,11 @@ import { Asset } from "expo-asset";
 import * as ImageManipulator from "expo-image-manipulator";
 import React, { useRef, useState } from "react";
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import NfcManager, { NfcTech } from "react-native-nfc-manager";
 
 const HomeScreen = () => {
   const [status, setStatus] = useState("Ready to Flash");
   const [progress, setProgress] = useState(0);
-  const pollingInterval = useRef<number | null>(null);
+  const pollingInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const startPolling = () => {
     setProgress(0);
@@ -46,118 +45,60 @@ const HomeScreen = () => {
     }
   };
 
-  const processAndFlash = async (tag: any) => {
+  const processAndFlash = async () => {
     try {
-      setStatus("Downloading Test Image...");
-
-      // We use a specific ID from Picsum to ensure consistency
+      // --- 1. PRE-PROCESSING (Do this before asking user to tap) ---
+      setStatus("Downloading Image...");
       const remoteUri = "https://picsum.photos/id/237/264/176";
-
-      Sentry.addBreadcrumb({
-        category: "nfc_test",
-        message: "Downloading from Picsum",
-        data: { url: remoteUri },
-      });
-
       const IMAGE = Asset.fromURI(remoteUri);
       const downloadedImage = await IMAGE.downloadAsync();
 
-      setStatus("Manipulating test image...");
-
-      // 1. ImageManipulator will download and cache this URL automatically
-      const context = ImageManipulator.ImageManipulator.manipulate(
+      setStatus("Processing...");
+      const result = await ImageManipulator.ImageManipulator.manipulate(
         downloadedImage.localUri || downloadedImage.uri,
-      );
+      )
+        .resize({ width: 264, height: 176 })
+        .renderAsync();
 
-      // 2. Force the hardware resolution (264x176)
-      context.resize({ width: 264, height: 176 });
-
-      const result = await context.renderAsync();
       const saveResult = await result.saveAsync({
         base64: true,
         format: ImageManipulator.SaveFormat.PNG,
       });
 
-      if (!saveResult.base64) {
-        throw new Error("Base64 generation failed");
-      }
+      if (!saveResult.base64) throw new Error("Base64 generation failed");
 
-      setStatus("Flashing... Hold Steady");
+      // --- 2. HARDWARE ENGAGEMENT ---
+      setStatus("Ready! Tap badge to phone"); // User sees this and knows to touch the tag
       startPolling();
 
       Sentry.addBreadcrumb({
         category: "native",
-        message: "Invoking flashImage",
+        message: "Invoking startScanAndFlash",
       });
 
-      console.log("Invoking native flash...");
-
-      // Do NOT pass 'tag' anymore.
-      // The Kotlin module now pulls it from the Activity Intent automatically.
-      const success = await StidgetWaveshareNfc.flashImage(saveResult.base64);
+      // This call will stay 'pending' until a tag is physically touched to the phone
+      const success = await StidgetWaveshareNfc.startScanAndFlash(
+        saveResult.base64,
+      );
 
       if (success) {
         setProgress(100);
-        Sentry.captureMessage("Flash successful", "info");
-        Alert.alert("Success", "License Disc Updated!");
+        Alert.alert("Success", "Image Updated!");
       } else {
-        Sentry.captureMessage(
-          "flashImage returned false (likely hardware mismatch)",
-          "error",
-        );
-        Alert.alert("Error", "Flash interrupted or header mismatch.");
+        Alert.alert("Error", "Flash returned false. Check hardware alignment.");
       }
-    } catch (error) {
-      console.error(error);
+    } catch (error: any) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("Flash failed:", message);
+
       Sentry.captureException(error, {
-        extra: { status, progress },
-        tags: { section: "image_processing" },
+        extra: { nativeErrorMessage: message },
       });
-      Alert.alert("Error", "Runtime image processing failed.");
+
+      Alert.alert("Flash Failed", message);
     } finally {
       stopPolling();
       setStatus("Ready to Flash");
-    }
-  };
-
-  const startNfcDiscovery = async () => {
-    Sentry.addBreadcrumb({
-      category: "ui",
-      message: "User triggered NFC scan",
-    });
-    try {
-      setStatus("Scanning... Hold badge to phone");
-
-      // Attempt to request technology
-      await NfcManager.requestTechnology(NfcTech.NfcA);
-      const tag = await NfcManager.getTag();
-
-      if (tag) {
-        Sentry.addBreadcrumb({
-          category: "nfc",
-          message: "Tag discovered successfully",
-        });
-        await processAndFlash(tag);
-      } else {
-        Sentry.captureMessage(
-          "NFC session started but no tag was captured",
-          "warning",
-        );
-        Alert.alert("Warning", "Tag not found");
-      }
-    } catch (ex: any) {
-      // Check if user just cancelled the session (common "error")
-      if (ex?.toString().includes("User cancel")) {
-        Sentry.addBreadcrumb({
-          category: "nfc",
-          message: "User cancelled NFC session",
-        });
-      } else {
-        Sentry.captureException(ex, { tags: { area: "nfc_discovery" } });
-      }
-      setStatus("Retry Scan");
-    } finally {
-      NfcManager.cancelTechnologyRequest();
     }
   };
 
@@ -170,7 +111,7 @@ const HomeScreen = () => {
           styles.button,
           progress > 0 && progress < 100 && styles.disabledButton,
         ]}
-        onPress={startNfcDiscovery}
+        onPress={processAndFlash}
         disabled={progress > 0 && progress < 100}
       >
         <Text style={styles.buttonText}>

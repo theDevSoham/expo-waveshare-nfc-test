@@ -6,7 +6,7 @@ type StidgetWaveshareNfcModuleEvents = {
 };
 
 class StidgetWaveshareNfcModule extends NativeModule<StidgetWaveshareNfcModuleEvents> {
-  async flashImage(base64Image: string, nfcTag: any): Promise<boolean> {
+  async startScanAndFlash(base64Image: string): Promise<boolean> {
     console.warn("NFC flashing is not supported on Web.");
     return false;
   }
