@@ -53,6 +53,14 @@
           "project": "react-native",
           "organization": "mine-eez"
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "extraProguardRules": "-keep class waveshare.feng.nfctag.activity.** { *; }\n-keep interface waveshare.feng.nfctag.activity.** { *; }\n-dontwarn waveshare.feng.nfctag.activity.**"
+          }
+        }
       ]
     ],
     "experiments": {

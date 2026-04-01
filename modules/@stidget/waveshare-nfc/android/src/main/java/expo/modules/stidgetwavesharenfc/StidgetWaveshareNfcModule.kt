@@ -32,33 +32,29 @@ class StidgetWaveshareNfcModule : Module() {
             // This gives us low-level, exclusive access to the NFC radio
             nfcAdapter.enableReaderMode(activity, { tag ->
                 try {
-                    val nfcA = NfcA.get(tag) ?: throw Exception("Tag does not support NfcA")
-                    
-                    // CRITICAL: Connect immediately to power the induction coil
-                    nfcA.connect()
-                    nfcA.timeout = 10000 // 10s timeout for the heavy 2.7" e-paper refresh
+                    val nfcA = NfcA.get(tag) ?: throw Exception("Tag mismatch")
 
-                    // 2. Initialize and Process
+                    // IMPORTANT: DO NOT call nfcA.connect() here.
+                    // The sdk.a() method inside WaveshareBridge does it for you.
+
                     bridge.initialize()
-                    
+
                     val bytes = Base64.decode(base64Image, Base64.DEFAULT)
                     val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                        ?: throw Exception("Failed to decode image bitmap")
+                        ?: throw Exception("Bitmap error")
 
-                    // 3. Transfer to Hardware (Type 6 = 2.7 inch)
+                    // This one call handles connection, handshake, and transfer
                     val result = bridge.transfer(nfcA, 6, bitmap)
-                    
+
                     bitmap.recycle()
-                    nfcA.close()
-                    
-                    // Resolve the promise with the success state
+                    // Note: sdk.a() does NOT call nfcA.close(), so we do it here
+                    try { nfcA.close() } catch (e: Exception) {}
+
                     resultPromise.complete(result == 1)
                 } catch (e: Exception) {
-                    // Pass the specific hardware error up
                     resultPromise.completeExceptionally(e)
                 }
             }, NfcAdapter.FLAG_READER_NFC_A or NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK, null)
-
             // 4. Wait for the process to complete or fail
             try {
                 return@AsyncFunction runBlocking {

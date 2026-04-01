@@ -49,7 +49,8 @@ const HomeScreen = () => {
     try {
       // --- 1. PRE-PROCESSING (Do this before asking user to tap) ---
       setStatus("Downloading Image...");
-      const remoteUri = "https://picsum.photos/id/237/264/176";
+      const remoteUri =
+        "https://placehold.co/264x176/000000/FFFFFF/png?text=NFC+TEST";
       const IMAGE = Asset.fromURI(remoteUri);
       const downloadedImage = await IMAGE.downloadAsync();
 
