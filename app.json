@@ -43,6 +43,7 @@
         }
       ],
       "./plugins/withWaveshareNfc.js",
+      "./plugins/withNFCIntent.js",
       "expo-asset",
       [
         "@sentry/react-native/expo",

@@ -43,6 +43,6 @@ app-example
 /android
 
 # generated module native folders
-modules/**/android/build/
+modules/**/android/build/*
 
 .env.local
