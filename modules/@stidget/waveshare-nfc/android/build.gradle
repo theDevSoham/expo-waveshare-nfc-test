@@ -15,9 +15,24 @@ android {
   lintOptions {
     abortOnError false
   }
+  defaultConfig {
+    consumerProguardFiles 'proguard-rules.pro'
+  }
+  buildTypes {
+    release {
+        // This ensures the module doesn't strip the JAR classes 
+        // before the main app even gets a chance to see them.
+        minifyEnabled false 
+        proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+    }
+  }
 }
 
 dependencies {
-  implementation fileTree(include: ['*.jar'], dir: 'libs')
-  implementation files('libs/NFC.jar')
+  // 1. Direct reference to the JAR file
+  // Replace 'NFC.jar' with the actual name of your file
+  implementation files('libs/NFC.jar') 
+  
+  // 2. Keep the fileTree as a backup
+  implementation fileTree(dir: 'libs', include: ['*.jar'])
 }

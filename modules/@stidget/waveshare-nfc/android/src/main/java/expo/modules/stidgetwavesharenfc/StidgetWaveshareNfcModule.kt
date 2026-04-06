@@ -28,6 +28,10 @@ class StidgetWaveshareNfcModule : Module() {
             // We use a Deferred value to wait for the callback to finish
             val resultPromise = CompletableDeferred<Boolean>()
 
+            val nfcFlags = NfcAdapter.FLAG_READER_NFC_A or 
+               NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK or 
+               NfcAdapter.FLAG_READER_NO_PLATFORM_SOUNDS
+
             // 1. Enable Reader Mode
             // This gives us low-level, exclusive access to the NFC radio
             nfcAdapter.enableReaderMode(activity, { tag ->
@@ -44,7 +48,7 @@ class StidgetWaveshareNfcModule : Module() {
                         ?: throw Exception("Bitmap error")
 
                     // This one call handles connection, handshake, and transfer
-                    val result = bridge.transfer(nfcA, 6, bitmap)
+                    val result = bridge.transfer(nfcA, 5, bitmap)
 
                     bitmap.recycle()
                     // Note: sdk.a() does NOT call nfcA.close(), so we do it here
@@ -54,7 +58,7 @@ class StidgetWaveshareNfcModule : Module() {
                 } catch (e: Exception) {
                     resultPromise.completeExceptionally(e)
                 }
-            }, NfcAdapter.FLAG_READER_NFC_A or NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK, null)
+            }, nfcFlags, null)
             // 4. Wait for the process to complete or fail
             try {
                 return@AsyncFunction runBlocking {

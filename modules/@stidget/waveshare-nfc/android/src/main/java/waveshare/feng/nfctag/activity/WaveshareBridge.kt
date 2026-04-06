@@ -20,7 +20,7 @@ class WaveshareBridge {
      * Returns the current progress (c).
      */
     fun getProgress(): Int {
-        return sdk.b()
+        return sdk.c;
     }
 
     /**

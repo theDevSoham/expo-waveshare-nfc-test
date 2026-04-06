@@ -15,6 +15,11 @@
     "assetBundlePatterns": ["**/*"],
     "android": {
       "permissions": ["android.permission.NFC"],
+      "intentFilters": [
+        {
+          "action": "android.nfc.action.TECH_DISCOVERED"
+        }
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

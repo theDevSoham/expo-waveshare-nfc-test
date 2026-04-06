@@ -1,0 +1,4 @@
+-keep class waveshare.feng.nfctag.activity.** { *; }
+-keep interface waveshare.feng.nfctag.activity.** { *; }
+-dontobfuscate
+-dontshrink
