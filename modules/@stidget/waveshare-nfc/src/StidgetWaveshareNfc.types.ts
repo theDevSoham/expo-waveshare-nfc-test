@@ -5,7 +5,10 @@ export type ProgressEventPayload = {
 };
 
 export type StidgetWaveshareNfcModuleEvents = {
-  onProgress: (params: ProgressEventPayload) => void;
+  /**
+   * The listener must be a function that receives the payload.
+   */
+  onProgressUpdate: (event: ProgressEventPayload) => void;
 };
 
 export type StidgetWaveshareNfcViewProps = {

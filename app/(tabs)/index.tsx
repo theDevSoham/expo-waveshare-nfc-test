@@ -1,64 +1,47 @@
 import StidgetWaveshareNfc from "@/modules/@stidget/waveshare-nfc";
+import {
+  EPaperDimensions,
+  EPaperType,
+} from "@/modules/@stidget/waveshare-nfc/src/Constants";
 import * as Sentry from "@sentry/react-native";
-import { Asset } from "expo-asset";
+import { useEvent } from "expo";
 import * as ImageManipulator from "expo-image-manipulator";
-import React, { useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  GestureHandlerRootView,
+  ScrollView,
+} from "react-native-gesture-handler";
 
 const HomeScreen = () => {
+  const [selectedType, setSelectedType] = useState<EPaperType>(
+    EPaperType.INCH_2_13,
+  );
   const [status, setStatus] = useState("Ready to Flash");
   const [progress, setProgress] = useState(0);
-  const pollingInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const startPolling = () => {
-    setProgress(0);
-    Sentry.addBreadcrumb({
-      category: "nfc",
-      message: "Starting progress polling",
-    });
+  // Derive config from the selection
+  const config = EPaperDimensions[selectedType];
 
-    pollingInterval.current = setInterval(() => {
-      try {
-        const currentProgress = StidgetWaveshareNfc.getProgress();
-        if (currentProgress >= 0) setProgress(currentProgress);
+  // useEvent returns the latest payload from the native 'onProgressUpdate' event
+  const event = useEvent(StidgetWaveshareNfc, "onProgressUpdate");
 
-        if (currentProgress === -1) {
-          Sentry.captureMessage(
-            "NFC Hardware reported failure state (-1)",
-            "warning",
-          );
-          stopPolling();
-        } else if (currentProgress >= 100) {
-          stopPolling();
-        }
-      } catch (err) {
-        Sentry.captureException(err, { tags: { area: "polling" } });
-        stopPolling();
-      }
-    }, 100);
-  };
-
-  const stopPolling = () => {
-    if (pollingInterval.current) {
-      clearInterval(pollingInterval.current);
-      pollingInterval.current = null;
+  useEffect(() => {
+    if (event) {
+      setProgress(event.progress);
     }
-  };
+  }, [event]);
 
   const processAndFlash = async () => {
     try {
-      // --- 1. PRE-PROCESSING (Do this before asking user to tap) ---
+      // --- 1. PRE-PROCESSING ---
       setStatus("Downloading Image...");
-      const remoteUri =
-        "https://placehold.co/264x176/000000/FFFFFF/png?text=NFC+TEST";
-      const IMAGE = Asset.fromURI(remoteUri);
-      const downloadedImage = await IMAGE.downloadAsync();
+      // Using dynamic width/height from constants
+      const uri = `https://placehold.co/${config.width}x${config.height}/000000/FFFFFF/png?text=STIDGET+NFC`;
 
       setStatus("Processing...");
-      const result = await ImageManipulator.ImageManipulator.manipulate(
-        downloadedImage.localUri || downloadedImage.uri,
-      )
-        .resize({ width: 264, height: 176 })
+      const result = await ImageManipulator.ImageManipulator.manipulate(uri)
+        .resize({ width: config.width, height: config.height })
         .renderAsync();
 
       const saveResult = await result.saveAsync({
@@ -69,16 +52,16 @@ const HomeScreen = () => {
       if (!saveResult.base64) throw new Error("Base64 generation failed");
 
       // --- 2. HARDWARE ENGAGEMENT ---
-      setStatus("Ready! Tap badge to phone"); // User sees this and knows to touch the tag
-      startPolling();
+      setProgress(0); // Reset progress at the start of a new session
+      setStatus("Ready! Tap badge to phone");
 
       Sentry.addBreadcrumb({
         category: "native",
-        message: "Invoking startScanAndFlash",
+        message: `Invoking flash for device type: ${selectedType}`,
       });
 
-      // This call will stay 'pending' until a tag is physically touched to the phone
       const success = await StidgetWaveshareNfc.startScanAndFlash(
+        selectedType,
         saveResult.base64,
       );
 
@@ -93,42 +76,94 @@ const HomeScreen = () => {
       console.error("Flash failed:", message);
 
       Sentry.captureException(error, {
-        extra: { nativeErrorMessage: message },
+        extra: { nativeErrorMessage: message, deviceType: selectedType },
       });
 
       Alert.alert("Flash Failed", message);
+      setProgress(0); // Clear progress on error to reset UI
     } finally {
-      stopPolling();
       setStatus("Ready to Flash");
+      // Optional: Clear progress after a delay if flash was successful
+      if (progress === 100) {
+        setTimeout(() => setProgress(0), 2000);
+      }
     }
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Waveshare 2.7" Controller</Text>
+    <GestureHandlerRootView>
+      <View style={styles.container}>
+        <Text style={styles.title}>Waveshare NFC Controller</Text>
 
-      <TouchableOpacity
-        style={[
-          styles.button,
-          progress > 0 && progress < 100 && styles.disabledButton,
-        ]}
-        onPress={processAndFlash}
-        disabled={progress > 0 && progress < 100}
-      >
-        <Text style={styles.buttonText}>
-          {progress > 0 && progress < 100 ? `Flashing: ${progress}%` : status}
-        </Text>
-      </TouchableOpacity>
+        <Text style={styles.sectionLabel}>Select Your Hardware:</Text>
 
-      {progress > 0 && progress < 100 && (
-        <View style={styles.progressContainer}>
-          <View style={styles.progressBarBackground}>
-            <View style={[styles.progressBarFill, { width: `${progress}%` }]} />
-          </View>
-          <Text style={styles.warning}>⚠️ DO NOT MOVE PHONE</Text>
+        {/* 2. Device Selector List */}
+        <View style={styles.selectorContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
+          >
+            {/* Convert Enum to Numeric Array for proper comparison */}
+            {(Object.values(EPaperType) as EPaperType[])
+              .filter((v) => typeof v === "number")
+              .map((type) => (
+                <TouchableOpacity
+                  key={type}
+                  style={[
+                    styles.chip,
+                    // Now comparing number to number (e.g., 1 === 1)
+                    selectedType === type && styles.selectedChip,
+                    progress > 0 && progress < 100 && styles.disabledChip,
+                  ]}
+                  disabled={progress > 0 && progress < 100}
+                  onPress={() => setSelectedType(type)}
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      selectedType === type && styles.selectedChipText,
+                    ]}
+                  >
+                    {EPaperDimensions[type].label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+          </ScrollView>
         </View>
-      )}
-    </View>
+
+        <View style={styles.infoBox}>
+          <Text style={styles.infoText}>
+            Target: {config.width} x {config.height} px
+          </Text>
+        </View>
+
+        {/* 3. Action Button */}
+        <TouchableOpacity
+          style={[
+            styles.button,
+            progress > 0 && progress < 100 && styles.disabledButton,
+          ]}
+          onPress={processAndFlash}
+          disabled={progress > 0 && progress < 100}
+        >
+          <Text style={styles.buttonText}>
+            {progress > 0 && progress < 100 ? `Flashing: ${progress}%` : status}
+          </Text>
+        </TouchableOpacity>
+
+        {progress > 0 && progress < 100 && (
+          <View style={styles.progressContainer}>
+            <View style={styles.progressBarBackground}>
+              <View
+                style={[styles.progressBarFill, { width: `${progress}%` }]}
+              />
+            </View>
+            <Text style={styles.warning}>⚠️ DO NOT MOVE PHONE</Text>
+          </View>
+        )}
+      </View>
+    </GestureHandlerRootView>
   );
 };
 
@@ -141,12 +176,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#f5f5f5",
   },
-  title: { fontSize: 22, fontWeight: "bold", marginBottom: 30, color: "#333" },
+  title: {
+    fontSize: 22,
+    fontWeight: "bold",
+    marginBottom: 30,
+    color: "#333",
+    textAlign: "center",
+  },
   button: {
     backgroundColor: "#007AFF",
     paddingVertical: 15,
     paddingHorizontal: 30,
     borderRadius: 12,
+    // Add simple shadow for depth
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   disabledButton: { backgroundColor: "#A2A2A2" },
   buttonText: { color: "white", fontSize: 16, fontWeight: "700" },
@@ -161,4 +208,34 @@ const styles = StyleSheet.create({
   },
   progressBarFill: { height: "100%", backgroundColor: "#4CD964" },
   warning: { color: "#FF3B30", fontSize: 14, fontWeight: "bold" },
+
+  sectionLabel: {
+    fontSize: 14,
+    color: "#6c757d",
+    marginBottom: 10,
+    alignSelf: "flex-start",
+  },
+  selectorContainer: { height: 50, marginBottom: 20 },
+  scrollContent: { paddingHorizontal: 5 },
+  chip: {
+    backgroundColor: "#e9ecef",
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: "#dee2e6",
+  },
+  selectedChip: { backgroundColor: "#007AFF", borderColor: "#007AFF" },
+  disabledChip: { opacity: 0.5 },
+  chipText: { color: "#495057", fontWeight: "600" },
+  selectedChipText: { color: "white" },
+  infoBox: {
+    marginBottom: 30,
+    padding: 10,
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    elevation: 1,
+  },
+  infoText: { color: "#495057", fontStyle: "italic" },
 });
