@@ -3,7 +3,6 @@ import {
   EPaperDimensions,
   EPaperType,
 } from "@/modules/@stidget/waveshare-nfc/src/Constants";
-import * as Sentry from "@sentry/react-native";
 import { useEvent } from "expo";
 import * as ImageManipulator from "expo-image-manipulator";
 import React, { useEffect, useState } from "react";
@@ -34,13 +33,16 @@ const HomeScreen = () => {
 
   const processAndFlash = async () => {
     try {
-      // --- 1. PRE-PROCESSING ---
-      setStatus("Downloading Image...");
-      // Using dynamic width/height from constants
-      const uri = `https://placehold.co/${config.width}x${config.height}/000000/FFFFFF/png?text=STIDGET+NFC`;
+      // --- 1. PRE-PROCESSING (Do this while the phone is still in the user's hand) ---
+      setStatus("Preparing Image...");
 
-      setStatus("Processing...");
+      // Rule out network issues: Use a static URL or local asset
+      const uri = `https://placehold.co/${config.width}x${config.height}/000000/FFFFFF/png?text=TEST+SUCCESS`;
+
+      // Perform all manipulation BEFORE calling the native module
       const result = await ImageManipulator.ImageManipulator.manipulate(uri)
+        // IMPORTANT: Remove the "- 50" logic for validation.
+        // We want to send the exact dimensions the JAR expects.
         .resize({ width: config.width, height: config.height })
         .renderAsync();
 
@@ -51,15 +53,12 @@ const HomeScreen = () => {
 
       if (!saveResult.base64) throw new Error("Base64 generation failed");
 
-      // --- 2. HARDWARE ENGAGEMENT ---
-      setProgress(0); // Reset progress at the start of a new session
-      setStatus("Ready! Tap badge to phone");
+      // --- 2. HARDWARE ENGAGEMENT (The "Point of No Return") ---
+      setProgress(0);
+      // Use a very clear instruction so the user doesn't tap too early
+      setStatus("IMAGE READY: Tap and HOLD badge");
 
-      Sentry.addBreadcrumb({
-        category: "native",
-        message: `Invoking flash for device type: ${selectedType}`,
-      });
-
+      // We pass the ALREADY prepared base64 string
       const success = await StidgetWaveshareNfc.startScanAndFlash(
         selectedType,
         saveResult.base64,
@@ -67,26 +66,16 @@ const HomeScreen = () => {
 
       if (success) {
         setProgress(100);
-        Alert.alert("Success", "Image Updated!");
+        Alert.alert("Success", "Hardware Acknowledged Image");
       } else {
-        Alert.alert("Error", "Flash returned false. Check hardware alignment.");
+        Alert.alert("Error", "JAR returned failure.");
       }
     } catch (error: any) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error("Flash failed:", message);
-
-      Sentry.captureException(error, {
-        extra: { nativeErrorMessage: message, deviceType: selectedType },
-      });
-
-      Alert.alert("Flash Failed", message);
-      setProgress(0); // Clear progress on error to reset UI
+      console.error("Flash failed:", error.message);
+      Alert.alert("Flash Failed", error.message);
+      setProgress(0);
     } finally {
       setStatus("Ready to Flash");
-      // Optional: Clear progress after a delay if flash was successful
-      if (progress === 100) {
-        setTimeout(() => setProgress(0), 2000);
-      }
     }
   };
 
