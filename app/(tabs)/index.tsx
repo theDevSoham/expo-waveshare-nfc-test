@@ -6,23 +6,22 @@ import {
 import { useEvent } from "expo";
 import * as ImageManipulator from "expo-image-manipulator";
 import React, { useEffect, useState } from "react";
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import {
-  GestureHandlerRootView,
-  ScrollView,
-} from "react-native-gesture-handler";
+  Alert,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 const HomeScreen = () => {
-  const [selectedType, setSelectedType] = useState<EPaperType>(
-    EPaperType.INCH_2_13,
-  );
   const [status, setStatus] = useState("Ready to Flash");
   const [progress, setProgress] = useState(0);
 
-  // Derive config from the selection
-  const config = EPaperDimensions[selectedType];
+  // Note: Your custom Kotlin module is currently hardcoded for 2.13" 250x122
+  const config = EPaperDimensions[EPaperType.INCH_2_13];
 
-  // useEvent returns the latest payload from the native 'onProgressUpdate' event
   const event = useEvent(StidgetWaveshareNfc, "onProgressUpdate");
 
   useEffect(() => {
@@ -33,16 +32,12 @@ const HomeScreen = () => {
 
   const processAndFlash = async () => {
     try {
-      // --- 1. PRE-PROCESSING (Do this while the phone is still in the user's hand) ---
       setStatus("Preparing Image...");
 
-      // Rule out network issues: Use a static URL or local asset
-      const uri = `https://placehold.co/${config.width}x${config.height}/000000/FFFFFF/png?text=TEST+SUCCESS`;
+      // 1. Image Processing
+      const uri = `https://placehold.co/${config.width}x${config.height}/000000/FFFFFF/png?text=HELLO+WORLD`;
 
-      // Perform all manipulation BEFORE calling the native module
       const result = await ImageManipulator.ImageManipulator.manipulate(uri)
-        // IMPORTANT: Remove the "- 50" logic for validation.
-        // We want to send the exact dimensions the JAR expects.
         .resize({ width: config.width, height: config.height })
         .renderAsync();
 
@@ -53,22 +48,16 @@ const HomeScreen = () => {
 
       if (!saveResult.base64) throw new Error("Base64 generation failed");
 
-      // --- 2. HARDWARE ENGAGEMENT (The "Point of No Return") ---
+      // 2. Hardware Engagement
       setProgress(0);
-      // Use a very clear instruction so the user doesn't tap too early
-      setStatus("IMAGE READY: Tap and HOLD badge");
+      setStatus("READY: Tap and HOLD badge");
 
-      // We pass the ALREADY prepared base64 string
-      const success = await StidgetWaveshareNfc.startScanAndFlash(
-        selectedType,
-        saveResult.base64,
-      );
+      // CALLING THE NEW CUSTOM MODULE FUNCTION
+      const success = await StidgetWaveshareNfc.flashImage(saveResult.base64);
 
       if (success) {
         setProgress(100);
-        Alert.alert("Success", "Hardware Acknowledged Image");
-      } else {
-        Alert.alert("Error", "JAR returned failure.");
+        Alert.alert("Success", "E-Paper Updated!");
       }
     } catch (error: any) {
       console.error("Flash failed:", error.message);
@@ -80,54 +69,14 @@ const HomeScreen = () => {
   };
 
   return (
-    <GestureHandlerRootView>
+    <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={styles.container}>
-        <Text style={styles.title}>Waveshare NFC Controller</Text>
-
-        <Text style={styles.sectionLabel}>Select Your Hardware:</Text>
-
-        {/* 2. Device Selector List */}
-        <View style={styles.selectorContainer}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.scrollContent}
-          >
-            {/* Convert Enum to Numeric Array for proper comparison */}
-            {(Object.values(EPaperType) as EPaperType[])
-              .filter((v) => typeof v === "number")
-              .map((type) => (
-                <TouchableOpacity
-                  key={type}
-                  style={[
-                    styles.chip,
-                    // Now comparing number to number (e.g., 1 === 1)
-                    selectedType === type && styles.selectedChip,
-                    progress > 0 && progress < 100 && styles.disabledChip,
-                  ]}
-                  disabled={progress > 0 && progress < 100}
-                  onPress={() => setSelectedType(type)}
-                >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      selectedType === type && styles.selectedChipText,
-                    ]}
-                  >
-                    {EPaperDimensions[type].label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-          </ScrollView>
-        </View>
+        <Text style={styles.title}>Stidget Custom NFC</Text>
 
         <View style={styles.infoBox}>
-          <Text style={styles.infoText}>
-            Target: {config.width} x {config.height} px
-          </Text>
+          <Text style={styles.infoText}>Target: 2.13" (250 x 122)</Text>
         </View>
 
-        {/* 3. Action Button */}
         <TouchableOpacity
           style={[
             styles.button,
@@ -137,7 +86,7 @@ const HomeScreen = () => {
           disabled={progress > 0 && progress < 100}
         >
           <Text style={styles.buttonText}>
-            {progress > 0 && progress < 100 ? `Flashing: ${progress}%` : status}
+            {progress > 0 && progress < 100 ? `Writing: ${progress}%` : status}
           </Text>
         </TouchableOpacity>
 
@@ -148,15 +97,13 @@ const HomeScreen = () => {
                 style={[styles.progressBarFill, { width: `${progress}%` }]}
               />
             </View>
-            <Text style={styles.warning}>⚠️ DO NOT MOVE PHONE</Text>
+            <Text style={styles.warning}>⚠️ KEEP DEVICE TOUCHING TAG</Text>
           </View>
         )}
       </View>
     </GestureHandlerRootView>
   );
 };
-
-export default HomeScreen;
 
 const styles = StyleSheet.create({
   container: {

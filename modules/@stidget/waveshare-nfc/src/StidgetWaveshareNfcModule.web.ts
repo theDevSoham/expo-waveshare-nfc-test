@@ -1,22 +1,21 @@
 import { NativeModule, registerWebModule } from "expo";
-import { ProgressEventPayload } from "./StidgetWaveshareNfc.types";
-
-type StidgetWaveshareNfcModuleEvents = {
-  onProgress: (params: ProgressEventPayload) => void;
-};
+import {
+  StidgetWaveshareNfcModuleEvents,
+  TagInfo,
+} from "./StidgetWaveshareNfc.types";
 
 class StidgetWaveshareNfcModule extends NativeModule<StidgetWaveshareNfcModuleEvents> {
-  async startScanAndFlash(base64Image: string): Promise<boolean> {
+  async flashImage(base64Image: string): Promise<boolean> {
     console.warn("NFC flashing is not supported on Web.");
     return false;
   }
 
-  getProgress() {
-    return 0;
+  async readTagInfo(): Promise<TagInfo> {
+    throw new Error("NFC not supported on web");
   }
 }
 
 export default registerWebModule(
   StidgetWaveshareNfcModule,
-  "StidgetWaveshareNfcModule",
+  "StidgetWaveshareNfc",
 );

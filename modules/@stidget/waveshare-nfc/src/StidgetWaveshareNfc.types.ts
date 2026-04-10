@@ -4,10 +4,13 @@ export type ProgressEventPayload = {
   progress: number;
 };
 
+export type TagInfo = {
+  sn: string;
+  pid: string;
+  firmwareVersion: string;
+};
+
 export type StidgetWaveshareNfcModuleEvents = {
-  /**
-   * The listener must be a function that receives the payload.
-   */
   onProgressUpdate: (event: ProgressEventPayload) => void;
 };
 
