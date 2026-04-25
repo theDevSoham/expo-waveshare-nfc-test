@@ -37,7 +37,8 @@ const HomeScreen = () => {
       // --- 1. PRE-PROCESSING ---
       setStatus("Downloading Image...");
       // Using dynamic width/height from constants
-      const uri = `https://placehold.co/${config.width}x${config.height}/000000/FFFFFF/png?text=STIDGET+NFC`;
+      const uri = `https://res.cloudinary.com/dourjocrv/image/upload/c_fill,w_${config.width},h_${config.height},f_auto,q_auto/v1775974139/test-img_mg8gzd.jpg`;
+      // const uri = `https://placehold.co/${config.width}x${config.height}/000000/FFFFFF/png?text=STIDGET+NFC`;
 
       setStatus("Processing...");
       const result = await ImageManipulator.ImageManipulator.manipulate(uri)
